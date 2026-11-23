@@ -50,6 +50,17 @@ Optional settings: copy `.env.example` to `.env` and edit it (port, DOUDOUS² AI
 - **Super administrator password:** choose your own permanent password at first sign-in and change it any time under *Account & security*; it is stored only as a hash in the database (so it survives restarts, updates and backups). Forgot it? Use a one-time recovery code on the sign-in page, or run `npm run reset-owner` on the server. Full details: `docs/SUPER_ADMIN.md`.
 - Known limit: an e-mail address can belong to only one account on the whole platform.
 
+## 1c. Prefects (new)
+
+- Menu **Prefects**. The school administrator appoints prefects for an academic year; teachers and parents can see the list (name, class and post only).
+- **Only students of Form 5, Lower Sixth and Upper Sixth** can be appointed (Terminale / Première also count). The server checks this, not only the screen.
+- Every school gets a starting list of 19 posts (Head Prefect, Senior Prefect, Discipline Prefect, Sports Prefect...). Under **Prefects > Posts** a school can rename, add or switch off posts.
+- The prefect post also appears on the **student's profile** (Profile tab, row "Prefect"), so the student's parent sees it for their own child.
+- A post can be ended by the administrator. If a prefect of the current year graduates, transfers or leaves Form 5 - Upper Sixth, the post ends by itself. Records are kept, never deleted.
+- Upgrading: replace the files, keep `data/`. One new migration (0021) adds two new tables and changes nothing existing; a safety copy is saved first.
+
+- **Look and feel:** `public/css/polish.css` adds smooth motion and colour (cards rise in and lift on hover, shining buttons, colour glow in the background, animated gold-and-blue frame on prefect cards). It is pure CSS and stops for people who ask their device for reduced motion. To switch it off, remove its `<link>` line from `public/index.html`.
+
 ## 2. What is where
 
 | Folder / file | What it is |
@@ -241,3 +252,10 @@ When it is on, the **server** (not just the menu) limits each teacher-role staff
 - A department opens a module; it does **not** grant extra discipline powers. The per-person permissions on the same page still apply.
 - The school administrator, parents, students and the platform owner are never limited by this.
 - A blocked request answers `403 department_access_denied`. Migration `0019_department_access.js` adds two new tables and changes nothing existing.
+
+## Small improvements
+
+- **PNG logos on PDFs.** A school's PNG logo (with or without a transparent background) now appears on the convocation PDF and on payment receipts, like JPEG logos already did. Decoded with Node's built-in `zlib`; nothing to install. Interlaced PNGs are not embedded (the PDF is simply made without a logo).
+- **Term dates.** In Settings → academic years, every term has a **Dates** button (start and end). Terms of the same year cannot overlap; teachers and parents can read the dates. Stored in a new table (migration `0020_term_dates.js`); the `terms` table is unchanged.
+- **French.** The Staff & Departments and My Office pages are now fully translated, including department names and positions. The stored values stay in English so existing data and rules keep working.
+- **School logo in the system.** Once a school has uploaded its logo (Settings → School), it appears beside "JAO" at the top of the side menu and the mobile header for everyone in that school, and at the top of every report card (larger, and kept when printing). Schools without a logo keep the JAO mark.
