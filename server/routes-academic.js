@@ -3,6 +3,7 @@ const S = require('./security');
 const A = require('./access');
 const { mapSeq } = require('./util');
 const calc = require('./calc');
+const { isEligibleClass } = require('./prefect-defaults');
 
 const ADMIN = ['school_admin'];
 const STAFF = ['school_admin', 'teacher'];
@@ -147,6 +148,13 @@ module.exports = function (app) {
         FROM student_guardians sg JOIN guardians g ON g.id = sg.guardian_id WHERE sg.student_id = ? AND sg.school_id = ? ORDER BY sg.is_primary DESC, g.id`, s.id, c.schoolId))
         .map((g) => ({ ...g, is_primary: !!g.is_primary, is_emergency: !!g.is_emergency, user_id: c.user.role === 'school_admin' ? g.user_id : undefined }));
     }
+    // Prefect posts of this student (visible to whoever may see the student record, so a parent sees their own child's posts).
+    // A post counts as current only while the student is still enrolled in Form 5 / Lower Sixth / Upper Sixth.
+    const stillEligible = s.status === 'active' && !s.archived_at && !!cls && isEligibleClass(cls.name);
+    out.prefect_posts = (await h.all(`SELECT a.status, p.name_en, p.name_fr, y.name year_name FROM prefect_appointments a
+      JOIN prefect_posts p ON p.id = a.post_id AND p.school_id = a.school_id JOIN academic_years y ON y.id = a.year_id AND y.school_id = a.school_id
+      WHERE a.school_id = ? AND a.student_id = ? ORDER BY y.name DESC, p.sort_order`, c.schoolId, s.id))
+      .map((a) => ({ post_en: a.name_en, post_fr: a.name_fr, year_name: a.year_name, current: a.status === 'active' && stillEligible }));
     return out;
   });
 

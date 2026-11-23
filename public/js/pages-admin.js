@@ -117,7 +117,7 @@ function academicTab(panel) {
     return h('div', { class: 'grid grid-2' },
       h('section', { class: 'card' }, h('h2', t('settings.years_terms')), years.length ? years.map((y) => h('div', { style: { borderBottom: '1px solid var(--line)', padding: '.6rem 0' } },
         h('div', { style: { display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' } }, h('strong', y.name), y.is_current ? badge(t('settings.current'), 'green') : h('button', { class: 'btn btn-sm', onclick: async () => { try { await post(`/academic-years/${y.id}/current`); draw(); } catch (e) { fail(e); } } }, t('settings.make_current'))),
-        h('div', { style: { margin: '.4rem 0' } }, y.terms.length ? y.terms.map((x) => badge(x.name, 'blue')) : h('span', { class: 'muted small' }, t('settings.no_terms')), ' ',
+        h('div', { style: { margin: '.4rem 0' } }, y.terms.length ? y.terms.map((x) => h('span', { style: { display: 'inline-flex', gap: '.2rem', alignItems: 'center', marginRight: '.6rem', flexWrap: 'wrap' } }, badge(x.starts_on ? `${x.name}: ${x.starts_on} → ${x.ends_on}` : x.name, 'blue'), h('button', { class: 'btn btn-sm btn-ghost', 'aria-label': `${t('terms.dates')} — ${x.name}`, onclick: () => termDatesForm(x, draw) }, t('terms.dates')))) : h('span', { class: 'muted small' }, t('settings.no_terms')), ' ',
           h('button', { class: 'btn btn-sm btn-ghost', onclick: () => { const n = input({ placeholder: 'Term 1', maxlength: 40 }); modal({ title: `${t('settings.add_term')} — ${y.name}`, body: field(t('subjects.name'), n, { required: true }), actions: [{ label: t('common.cancel'), class: 'btn-ghost', onclick: (c) => c() }, { label: t('common.save'), class: 'btn-primary', onclick: async (c) => { try { await post('/terms', { year_id: y.id, name: n.value }); c(); draw(); } catch (e) { fail(e); } } }] }); } }, `+ ${t('settings.add_term')}`)))) : h('p', { class: 'muted' }, t('settings.no_years')),
         h('form', { style: { marginTop: '1rem' }, onsubmit: async (e) => { e.preventDefault(); try { await post('/academic-years', { name: yname.value }); draw(); } catch (ex) { fail(ex); } } }, field(t('settings.new_year'), yname, { required: true }), h('button', { class: 'btn btn-primary', type: 'submit' }, t('settings.add_year')))),
       h('form', { class: 'card', onsubmit: async (e) => { e.preventDefault(); try { await put('/settings/school', { grade_scale: Number(g.scale.value), pass_mark: Number(g.pass.value), rounding: Number(g.round.value), ranking_enabled: g.rank.checked }); toast(t('common.saved')); } catch (ex) { fail(ex); } } },
@@ -195,3 +195,11 @@ function knowledgeForm(k, done) {
 
 // ================= Platform owner (no student data is ever shown here) =================
 void errText; void ApiError; void fmtNum; void qs;
+
+// Start and end dates of a term (empty = no dates).
+function termDatesForm(term, done) {
+  const a = input({ type: 'date', value: term.starts_on || '' }), b = input({ type: 'date', value: term.ends_on || '' });
+  modal({ title: `${t('terms.dates')} — ${term.name}`, body: h('div', field(t('terms.starts'), a), field(t('terms.ends'), b), h('p', { class: 'muted small' }, t('terms.hint'))),
+    actions: [{ label: t('common.cancel'), class: 'btn-ghost', onclick: (c) => c() },
+      { label: t('common.save'), class: 'btn-primary', onclick: async (c) => { try { await put(`/terms/${term.id}/dates`, { starts_on: a.value, ends_on: b.value }); toast(t('common.saved')); c(); done(); } catch (e) { fail(e); } } }] });
+}

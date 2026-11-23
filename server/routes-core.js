@@ -6,6 +6,7 @@ const S = require('./security');
 const A = require('./access');
 const { newSchoolCode } = require('./db');
 const { seedDiscipline } = require('./discipline-defaults');
+const { seedPrefects } = require('./prefect-defaults');
 
 const ADMIN = ['school_admin'];
 const OWNER = ['platform_owner'];
@@ -329,6 +330,7 @@ module.exports = function (app) {
       sid, adminEmail.toLowerCase(), S.hashPassword(adminPassword), adminName, initials, mustChange ? 1 : 0);
     if (requestId) await h.run("UPDATE registration_requests SET status = 'approved', decided_at = NOW_TS WHERE id = ?", requestId);
     await seedDiscipline(h, sid);
+    await seedPrefects(h, sid);
     await h.audit(sid, actor ?? null, 'school_created', `school:${sid}`);
     if (logo) await h.run('UPDATE schools SET logo_file_id = ? WHERE id = ?', await app.saveImage(sid, 'school_logo', logo, null), sid);
     return { schoolId: sid, code: schoolCode, slug: s };
@@ -395,7 +397,8 @@ module.exports = function (app) {
   route('GET', '/academic-years', ['school_admin', 'teacher', 'parent', 'student'], async (c) => {
     const years = await h.all('SELECT * FROM academic_years WHERE school_id = ? ORDER BY name DESC', c.schoolId);
     const terms = await h.all('SELECT * FROM terms WHERE school_id = ? ORDER BY year_id, position', c.schoolId);
-    return years.map((y) => ({ ...y, is_current: !!y.is_current, terms: terms.filter((t) => t.year_id === y.id) }));
+    const dates = new Map((await h.all('SELECT term_id, starts_on, ends_on FROM term_dates WHERE school_id = ?', c.schoolId)).map((d) => [d.term_id, d]));
+    return years.map((y) => ({ ...y, is_current: !!y.is_current, terms: terms.filter((t) => t.year_id === y.id).map((t) => ({ ...t, starts_on: dates.get(t.id)?.starts_on || null, ends_on: dates.get(t.id)?.ends_on || null })) }));
   });
   route('POST', '/academic-years', ADMIN, async (c) => {
     const name = S.req(c.body.name, 'name_required', 40);
@@ -412,6 +415,24 @@ module.exports = function (app) {
     if (!await h.get('SELECT 1 FROM academic_years WHERE id = ? AND school_id = ?', id, c.schoolId)) throw S.notFound();
     await h.tx(async () => { await h.run('UPDATE academic_years SET is_current = 0 WHERE school_id = ?', c.schoolId); await h.run('UPDATE academic_years SET is_current = 1 WHERE id = ? AND school_id = ?', id, c.schoolId); });
     await h.audit(c.schoolId, c.user.id, 'year_set_current', `year:${id}`);
+  });
+  // Start and end dates of a term (YYYY-MM-DD). Send both empty to remove them. Terms of one year may not overlap.
+  route('PUT', '/terms/:id/dates', ADMIN, async (c) => {
+    const id = S.toInt(c.params.id);
+    const term = id === null ? null : await h.get('SELECT id, year_id FROM terms WHERE id = ? AND school_id = ?', id, c.schoolId);
+    if (!term) throw S.notFound();
+    const a = S.str(c.body.starts_on, 10), b = S.str(c.body.ends_on, 10);
+    if (!a && !b) { await h.run('DELETE FROM term_dates WHERE term_id = ? AND school_id = ?', id, c.schoolId); await h.audit(c.schoolId, c.user.id, 'term_dates_cleared', `term:${id}`); return { ok: true, starts_on: null, ends_on: null }; }
+    if (!S.isDate(a) || !S.isDate(b)) throw S.bad('invalid_date');
+    if (a > b) throw S.bad('term_dates_order');
+    const clash = await h.get(`SELECT 1 FROM term_dates d JOIN terms t ON t.id = d.term_id AND t.school_id = d.school_id
+      WHERE d.school_id = ? AND t.year_id = ? AND d.term_id <> ? AND d.starts_on <= ? AND d.ends_on >= ?`, c.schoolId, term.year_id, id, b, a);
+    if (clash) throw S.bad('term_dates_overlap');
+    const had = await h.get('SELECT 1 FROM term_dates WHERE term_id = ? AND school_id = ?', id, c.schoolId);
+    if (had) await h.run("UPDATE term_dates SET starts_on = ?, ends_on = ?, updated_by = ?, updated_at = datetime('now') WHERE term_id = ? AND school_id = ?", a, b, c.user.id, id, c.schoolId);
+    else await h.run("INSERT INTO term_dates (school_id, term_id, starts_on, ends_on, updated_by, updated_at) VALUES (?,?,?,?,?,datetime('now'))", c.schoolId, id, a, b, c.user.id);
+    await h.audit(c.schoolId, c.user.id, 'term_dates_set', `term:${id}`, { starts_on: a, ends_on: b });
+    return { ok: true, starts_on: a, ends_on: b };
   });
   route('POST', '/terms', ADMIN, async (c) => {
     const yid = S.toInt(c.body.year_id);

@@ -44,6 +44,7 @@ export const svgIcon = (name, size = 20) => {
     chat: 'M4 5h16v11H9l-5 4z', robot: 'M12 3v3M8 6h8a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3zM2 12v3M22 12v3M9 11v1.5M15 11v1.5M9 16h6', bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4', menu: 'M3 6h18M3 12h18M3 18h18', plus: 'M12 5v14M5 12h14',
     search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-5-5', sound: 'M4 9v6h4l5 4V5L8 9zM16 8a5 5 0 0 1 0 8', mute: 'M4 9v6h4l5 4V5L8 9zM17 9l4 6M21 9l-4 6',
     discipline: 'M12 3v18M6 21h12M5 7h14M5 7l-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z',
+    prefects: 'M12 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM8.5 12.5L7 21l5-3 5 3-1.5-8.5',
     scholarship: 'M12 3l2.7 5.5 6 .9-4.4 4.2 1 6L12 16.8 6.7 19.6l1-6L3.3 9.4l6-.9z',
     platform: 'M12 2l9 5v6c0 5-4 8-9 9-5-1-9-4-9-9V7z', check: 'M5 12l5 5 9-10', close: 'M6 6l12 12M18 6L6 18',
   };
@@ -64,7 +65,10 @@ export const logoMark = (size = 40) => {
   }
   return s;
 };
-export const brand = (opts = {}) => h('div', { class: 'brand' + (opts.light ? ' brand-light' : '') }, logoMark(opts.size || 38),
+// opts.school = the signed-in school: when it has a logo, that logo is shown beside "JAO" instead of the generic mark.
+export const brand = (opts = {}) => h('div', { class: 'brand' + (opts.light ? ' brand-light' : '') }, opts.school && opts.school.logo
+    ? h('img', { class: 'brand-school-logo', src: opts.school.logo, alt: opts.school.name || '', style: { width: `${opts.size || 38}px`, height: `${opts.size || 38}px` }, onerror: (e) => e.target.replaceWith(logoMark(opts.size || 38)) })
+    : logoMark(opts.size || 38),
   h('div', { class: 'brand-text' }, h('strong', 'JAO'), opts.sub === false ? null : h('small', t('brand.sub'))));
 
 // ---------- API ----------

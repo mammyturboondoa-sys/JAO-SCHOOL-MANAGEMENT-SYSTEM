@@ -67,12 +67,80 @@ function jpegInfo(buf) {
   return null;
 }
 
-// build(pages, { title, author, jpeg }) -> Buffer
+// ---- PNG logos (so a school's PNG logo can appear on PDFs too). Dependency-free: node:zlib only. ----
+// Handles non-interlaced PNGs of every common kind (grey, RGB, palette, with or without transparency, 1-16 bits).
+// Returns { w, h, rgb: Buffer(w*h*3), alpha: Buffer(w*h) | null }, or null when the file is not a PNG this can read.
+function decodePng(buf) {
+  const zlib = require('node:zlib');
+  const SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  try {
+    if (!Buffer.isBuffer(buf) || buf.length < 33 || !buf.subarray(0, 8).equals(SIG)) return null;
+    let i = 8, w = 0, h = 0, depth = 0, ctype = -1, interlace = 0, plte = null, trns = null; const idat = [];
+    while (i + 8 <= buf.length) {
+      const len = buf.readUInt32BE(i), type = buf.toString('latin1', i + 4, i + 8), d = buf.subarray(i + 8, i + 8 + len);
+      if (type === 'IHDR') { w = d.readUInt32BE(0); h = d.readUInt32BE(4); depth = d[8]; ctype = d[9]; interlace = d[12]; }
+      else if (type === 'PLTE') plte = d; else if (type === 'tRNS') trns = d; else if (type === 'IDAT') idat.push(d); else if (type === 'IEND') break;
+      i += 12 + len;
+    }
+    if (!w || !h || w > 4000 || h > 4000 || interlace !== 0 || !idat.length) return null;
+    const chan = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[ctype]; if (!chan || ![1, 2, 4, 8, 16].includes(depth)) return null;
+    if (ctype === 3 && !plte) return null;
+    const bpp = Math.max(1, (chan * depth) >> 3), stride = (w * chan * depth + 7) >> 3;
+    const raw = zlib.inflateSync(Buffer.concat(idat));
+    if (raw.length < (stride + 1) * h) return null;
+    const px = Buffer.alloc(stride * h);
+    for (let y = 0; y < h; y++) {
+      const f = raw[y * (stride + 1)], src = y * (stride + 1) + 1, dst = y * stride;
+      for (let x = 0; x < stride; x++) {
+        const a = x >= bpp ? px[dst + x - bpp] : 0, b = y ? px[dst - stride + x] : 0, c = x >= bpp && y ? px[dst - stride + x - bpp] : 0;
+        let v = raw[src + x];
+        if (f === 1) v += a; else if (f === 2) v += b; else if (f === 3) v += (a + b) >> 1;
+        else if (f === 4) { const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+        else if (f !== 0) return null;
+        px[dst + x] = v & 255;
+      }
+    }
+    const sample = (y, idx) => { // idx = sample index in the row; returns value scaled to 0-255 (palette: the raw index)
+      const row = y * stride;
+      if (depth === 8) return px[row + idx];
+      if (depth === 16) return px[row + idx * 2];
+      const bit = idx * depth, byte = px[row + (bit >> 3)], v = (byte >> (8 - depth - (bit & 7))) & ((1 << depth) - 1);
+      return ctype === 3 ? v : Math.round(v * 255 / ((1 << depth) - 1));
+    };
+    const rgb = Buffer.alloc(w * h * 3); let alpha = (ctype === 4 || ctype === 6 || trns) ? Buffer.alloc(w * h, 255) : null;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 3; let r, g, b, a = 255;
+      if (ctype === 0) { r = g = b = sample(y, x); if (trns && trns.length >= 2 && depth <= 8 && sample(y, x) === (depth === 8 ? trns[1] : Math.round(trns[1] * 255 / ((1 << depth) - 1)))) a = 0; }
+      else if (ctype === 4) { r = g = b = sample(y, x * 2); a = sample(y, x * 2 + 1); }
+      else if (ctype === 2) { r = sample(y, x * 3); g = sample(y, x * 3 + 1); b = sample(y, x * 3 + 2); if (trns && trns.length >= 6 && depth === 8 && r === trns[1] && g === trns[3] && b === trns[5]) a = 0; }
+      else if (ctype === 6) { r = sample(y, x * 4); g = sample(y, x * 4 + 1); b = sample(y, x * 4 + 2); a = sample(y, x * 4 + 3); }
+      else { const k = sample(y, x); r = plte[k * 3] || 0; g = plte[k * 3 + 1] || 0; b = plte[k * 3 + 2] || 0; a = trns && k < trns.length ? trns[k] : 255; }
+      rgb[o] = r; rgb[o + 1] = g; rgb[o + 2] = b; if (alpha) alpha[y * w + x] = a;
+    }
+    if (alpha && alpha.every((v) => v === 255)) alpha = null;
+    return { w, h, rgb, alpha };
+  } catch { return null; }
+}
+
+// Width and height of a logo that can be embedded (JPEG or PNG), else null. Used to size and place it.
+function imageInfo(buf) {
+  if (!Buffer.isBuffer(buf)) return null;
+  const j = jpegInfo(buf); if (j) return { w: j.w, h: j.h, kind: 'jpeg' };
+  const p = decodePng(buf); return p ? { w: p.w, h: p.h, kind: 'png' } : null;
+}
+
+// build(pages, { title, author, jpeg, logo }) -> Buffer  (logo = JPEG or PNG bytes; jpeg kept for older callers)
 function build(pages, meta = {}) {
   const objs = []; const add = (body) => { objs.push(body); return objs.length; };
   const cat = add(null), pagesObj = add(null), f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'), f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
   let img = null, info = null;
-  if (meta.jpeg && (info = jpegInfo(meta.jpeg))) {
+  const logoBuf = meta.logo || meta.jpeg, png = logoBuf && !jpegInfo(logoBuf) ? decodePng(logoBuf) : null;
+  if (png) {
+    const zlib = require('node:zlib'), obj = (dict, data) => Buffer.concat([Buffer.from(`<< ${dict} /Length ${data.length} >>\nstream\n`, 'latin1'), data, Buffer.from('\nendstream', 'latin1')]);
+    const sm = png.alpha ? add(obj(`/Type /XObject /Subtype /Image /Width ${png.w} /Height ${png.h} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode`, zlib.deflateSync(png.alpha))) : null;
+    img = add(obj(`/Type /XObject /Subtype /Image /Width ${png.w} /Height ${png.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode${sm ? ` /SMask ${sm} 0 R` : ''}`, zlib.deflateSync(png.rgb)));
+  } else if (logoBuf && (info = jpegInfo(logoBuf))) {
+    meta = { ...meta, jpeg: logoBuf };
     img = add(Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${info.w} /Height ${info.h} /ColorSpace /${info.comps === 1 ? 'DeviceGray' : info.comps === 4 ? 'DeviceCMYK' : 'DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode /Length ${meta.jpeg.length} >>\nstream\n`, 'latin1'), meta.jpeg, Buffer.from('\nendstream', 'latin1')]));
   }
   const infoObj = add(`<< /Title <${toWin(meta.title || 'Document').toString('hex')}> /Producer (JAO SchoolManager) >>`);
@@ -97,4 +165,4 @@ function build(pages, meta = {}) {
   return Buffer.concat(parts);
 }
 
-module.exports = { build, Page, wrap, textWidth, jpegInfo };
+module.exports = { build, Page, wrap, textWidth, jpegInfo, decodePng, imageInfo };

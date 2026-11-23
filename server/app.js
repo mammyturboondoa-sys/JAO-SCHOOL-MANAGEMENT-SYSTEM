@@ -43,6 +43,7 @@ async function createApp({ dbFile, dataDir, secureCookies = false, env = process
   require('./routes-dudus')(app);
   require('./routes-notifications')(app);
   require('./routes-discipline')(app);
+  require('./routes-prefects')(app);
   require('./routes-scholarships')(app);
   require('./routes-convocations')(app);
   require('./routes-import')(app);

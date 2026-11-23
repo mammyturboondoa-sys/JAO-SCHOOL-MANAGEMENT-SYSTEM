@@ -209,9 +209,9 @@ module.exports = function (app) {
     let jpeg = null;
     if (sch.logo_file_id) {
       const f = await h.get("SELECT path, mime FROM files WHERE id = ? AND school_id = ? AND kind = 'school_logo'", sch.logo_file_id, c.schoolId);
-      if (f && f.mime === 'image/jpeg') { try { jpeg = fs.readFileSync(f.path); } catch { jpeg = null; } }
+      if (f && (f.mime === 'image/jpeg' || f.mime === 'image/png')) { try { jpeg = fs.readFileSync(f.path); } catch { jpeg = null; } } // JPEG or PNG logo
     }
-    const inf = jpeg && pdf.jpegInfo(jpeg);
+    const inf = jpeg && pdf.imageInfo(jpeg);
     if (inf) { const hh = 56, ww = Math.min(80, inf.w * hh / inf.h); p.logo = { x: L, y: p.y - hh + 12, w: ww, h: hh }; }
     const hx = inf ? L + 96 : L;
     p.text(sch.name, hx, p.y, 15, true);
@@ -248,7 +248,7 @@ module.exports = function (app) {
     p.text(T.parentSig, L, p.y, 8.5, false); p.text(T.ackDate, R - 130, p.y, 8.5, false);
     p.text(`${T.conf}  ${T.ref} ${v.reference}`, L, 40, 8, false);
     await h.audit(c.schoolId, c.user.id, 'convocation_pdf_generated', `convocation:${v.id}`, { lang });
-    const buf = pdf.build([p], { title: `${T.title} ${v.reference}`, jpeg });
+    const buf = pdf.build([p], { title: `${T.title} ${v.reference}`, logo: jpeg });
     return { __raw: true, body: buf, headers: { 'Content-Type': 'application/pdf', 'Cache-Control': 'private, no-store', 'Content-Disposition': `attachment; filename="${v.reference}-${lang}.pdf"` } };
   }
 

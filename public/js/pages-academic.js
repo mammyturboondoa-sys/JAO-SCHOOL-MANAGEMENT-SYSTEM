@@ -189,7 +189,7 @@ export async function reportCardPage(ctx, view) {
       })())) : null;
       view.replaceChildren(h('div', { class: 'no-print' }, h('a', { href: isAdmin() ? '#/reports' : '#/reports', class: 'small' }, `← ${t('nav.reports')}`),
         h('div', { class: 'toolbar', style: { marginTop: '.5rem' } }, h('div', field(t('acad.term'), sel)), h('button', { class: 'btn btn-primary', onclick: () => window.print() }, t('reports.print')))), approve,
-        h('article', { class: 'report' }, h('div', { class: 'report-head' }, r.school.logo ? h('img', { class: 'logo', src: r.school.logo, alt: '' }) : null, h('div', { style: { flex: 1 } }, h('h1', r.school.name), r.school.motto ? h('div', { class: 'muted' }, r.school.motto) : null, h('div', { class: 'small muted' }, [r.school.address, r.school.phone].filter(Boolean).join(' · '))),
+        h('article', { class: 'report' }, h('div', { class: 'report-head' }, r.school.logo ? h('img', { class: 'logo', src: r.school.logo, alt: r.school.name || '' }) : null, h('div', { style: { flex: 1 } }, h('h1', r.school.name), r.school.motto ? h('div', { class: 'muted' }, r.school.motto) : null, h('div', { class: 'small muted' }, [r.school.address, r.school.phone].filter(Boolean).join(' · '))),
           avatar(r.student.full_name, r.student.photo, 'md')),
           h('h2', { style: { textAlign: 'center' } }, `${t('reports.report_card')} — ${r.term.name} — ${r.term.year_name}`),
           h('div', { class: 'report-meta' }, h('div', h('strong', `${t('form.full_name')}: `), r.student.full_name), h('div', h('strong', `${t('students.id')}: `), r.student.student_code), h('div', h('strong', `${t('form.class')}: `), r.student.class_label || '—'), h('div', h('strong', `${t('common.date')}: `), fmtDate(r.generated_on))),

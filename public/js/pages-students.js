@@ -158,6 +158,14 @@ export async function studentFormPage(ctx, view, editId) {
   paint();
 }
 
+// Prefect posts shown on the profile (the parent of the student sees them too).
+const prefectRow = (s) => {
+  const list = s.prefect_posts || [];
+  if (!list.length) return [];
+  const nameOf = (p) => (state.lang === 'fr' ? p.post_fr : p.post_en);
+  return [h('dt', t('profile.prefect')), h('dd', list.map((p) => h('div', nameOf(p), ' ', h('span', { class: 'small muted' }, `(${p.year_name}${p.current ? '' : ' · ' + t('profile.prefect_past')})`))))];
+};
+
 // ================= Profile: Profile / Academic Records / Guardians / History =================
 export async function studentProfilePage(ctx, view) {
   const s = await get(`/students/${ctx.params.id}`);
@@ -170,7 +178,7 @@ export async function studentProfilePage(ctx, view) {
   function render() {
     panel.replaceChildren();
     if (tab === 'profile') panel.append(h('div', { class: 'card' }, h('dl', { class: 'dl' }, row(t('form.student_id'), s.student_code), row(t('form.full_name'), s.full_name), row(t('form.dob'), fmtDate(s.dob)), row(t('form.gender'), s.gender ? t(`gender.${s.gender}`) : ''),
-      row(t('form.birthplace'), s.birthplace), row(t('form.address'), s.address), row(t('form.class'), s.class_label), row(t('form.year'), s.year_name), row(t('form.stream'), s.stream), row(t('form.enrolled_on'), fmtDate(s.enrolled_on)), row(t('form.previous_school'), s.previous_school), row(t('form.status'), statusBadge(s.status)))));
+      row(t('form.birthplace'), s.birthplace), row(t('form.address'), s.address), row(t('form.class'), s.class_label), row(t('form.year'), s.year_name), row(t('form.stream'), s.stream), row(t('form.enrolled_on'), fmtDate(s.enrolled_on)), row(t('form.previous_school'), s.previous_school), row(t('form.status'), statusBadge(s.status)), prefectRow(s))));
     else if (tab === 'academics') academics();
     else if (tab === 'gce') gceTab(panel, s);
     else if (tab === 'guardians') guardians();

@@ -13,12 +13,13 @@ import { scholarshipsPage, applicationPage } from './pages-scholarships.js';
 import { importCentrePage } from './pages-import.js';
 import { ownerAccountPage, ownerRecoverPage } from './pages-owner.js';
 import { disciplinePage, incidentPage, studentHistoryPage, meetingPage, casePage, convocationPage, myConvocationsPage } from './pages-discipline.js';
+import { prefectsPage } from './pages-prefects.js';
 import { mountDudus } from './dudus.js';
 
 const NAV = {
-  school_admin: [['overview', 'overview'], ['students', 'students'], ['classes', 'classes'], ['subjects', 'subjects'], ['grades', 'grades'], ['reports', 'reports'], ['discipline', 'discipline'], ['parents', 'students'], ['school-life', 'classes'], ['scholarships', 'scholarship'], ['shop', 'shop'], ['products', 'products'], ['import', 'products'], ['staff', 'students'], ['settings', 'settings']],
-  teacher: [['office', 'students'], ['overview', 'overview'], ['students', 'students'], ['classes', 'classes'], ['subjects', 'subjects'], ['grades', 'grades'], ['discipline', 'discipline'], ['school-life', 'classes'], ['scholarships', 'scholarship'], ['shop', 'shop']],
-  parent: [['parent', 'students'], ['my-convocations', 'discipline'], ['overview', 'overview'], ['students', 'students'], ['reports', 'reports'], ['scholarships', 'scholarship'], ['shop', 'shop']],
+  school_admin: [['overview', 'overview'], ['students', 'students'], ['classes', 'classes'], ['subjects', 'subjects'], ['grades', 'grades'], ['reports', 'reports'], ['discipline', 'discipline'], ['prefects', 'prefects'], ['parents', 'students'], ['school-life', 'classes'], ['scholarships', 'scholarship'], ['shop', 'shop'], ['products', 'products'], ['import', 'products'], ['staff', 'students'], ['settings', 'settings']],
+  teacher: [['office', 'students'], ['overview', 'overview'], ['students', 'students'], ['classes', 'classes'], ['subjects', 'subjects'], ['grades', 'grades'], ['discipline', 'discipline'], ['prefects', 'prefects'], ['school-life', 'classes'], ['scholarships', 'scholarship'], ['shop', 'shop']],
+  parent: [['parent', 'students'], ['my-convocations', 'discipline'], ['overview', 'overview'], ['students', 'students'], ['reports', 'reports'], ['prefects', 'prefects'], ['scholarships', 'scholarship'], ['shop', 'shop']],
   student: [['overview', 'overview'], ['students', 'students'], ['reports', 'reports'], ['scholarships', 'scholarship'], ['shop', 'shop']],
   platform_owner: [['platform', 'platform'], ['platform/tools', 'platform'], ['account', 'settings']],
 };
@@ -42,7 +43,7 @@ function buildShell() {
   const mods = u.role === 'teacher' && Array.isArray(state.modules) ? state.modules : null; // department access: the menu mirrors what the server allows
   const items = (NAV[u.role] || []).filter(([key]) => !mods || !NAV_MODULE[key] || mods.includes(NAV_MODULE[key]));
   const side = h('aside', { class: 'sidebar', id: 'sidebar', 'aria-label': t('nav.main') },
-    h('div', { class: 'brand-wrap' }, brand({ light: true, size: 40 })),
+    h('div', { class: 'brand-wrap' }, brand({ light: true, size: 40, school: state.school })),
     h('nav', { class: 'nav' }, items.map(([key, icon]) => h('a', { href: `#/${key}`, 'data-key': key, onclick: closeSide }, svgIcon(icon), t(`nav.${key}`)))),
     h('div', { class: 'side-foot' }, state.school ? state.school.name : t('platform.owner'), state.school && state.school.code ? h('div', { class: 'small' }, state.school.code) : null, h('br'), t('brand.by')));
   const scrim = h('div', { class: 'scrim', hidden: true, onclick: closeSide });
@@ -52,7 +53,7 @@ function buildShell() {
   const profile = h('div', { class: 'menu' });
   const top = h('header', { class: 'topbar' },
     h('button', { class: 'icon-btn menu-btn', 'aria-label': t('nav.open_menu'), onclick: () => { side.classList.add('open'); scrim.hidden = false; } }, svgIcon('menu', 24)),
-    h('div', { class: 'top-brand' }, brand({ light: true, size: 30, sub: false })),
+    h('div', { class: 'top-brand' }, brand({ light: true, size: 30, sub: false, school: state.school })),
     h('div', { class: 'spacer' }), langSwitch(), bell, profile);
   const view = h('main', { class: 'content', id: 'view', tabindex: '-1' });
   const el = h('div', { class: 'shell' }, side, h('div', { class: 'main' }, top, view), scrim);
@@ -160,6 +161,7 @@ defineRoute('/shop', authed(ALL, shopPage));
 defineRoute('/products', authed(ADMIN, productsPage));
 defineRoute('/scholarships', authed(ALL, scholarshipsPage));
 defineRoute('/scholarships/applications/:id', authed(ALL, applicationPage));
+defineRoute('/prefects', authed(['school_admin', 'teacher', 'parent'], prefectsPage));
 defineRoute('/discipline', authed(STAFF, disciplinePage));
 defineRoute('/discipline/incidents/new', authed(STAFF, (c, v) => incidentPage(c, v, null)));
 defineRoute('/discipline/incidents/:id', authed(STAFF, (c, v) => incidentPage(c, v, c.params.id)));
